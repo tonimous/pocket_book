@@ -145,6 +145,10 @@ def show_transaction_form(transaction_type, user_name):
 
     tk.Button(root, text="Submit", command=submit_transaction).pack(pady=10)
 
+    # Back button
+    tk.Button(root, text="Back", command=lambda: show_options(user_name)).pack(pady=10)
+    
+
 # User entry screen
 tk.Label(root, text="Enter your name:", font=("Helvetica", 14)).pack(pady=10)
 entry_name = tk.Entry(root)
