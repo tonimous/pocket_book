@@ -1,6 +1,8 @@
 import sqlite3
 import tkinter as tk
 from tkinter import messagebox, ttk
+from datetime import datetime
+
 
 # Connect to the database
 conn = sqlite3.connect('haushaltsbuch.db')
@@ -22,6 +24,7 @@ CREATE TABLE IF NOT EXISTS income (
     description TEXT,
     recurring BOOLEAN NOT NULL,
     frequency TEXT,
+    category TEXT,
     user_id INTEGER,
     FOREIGN KEY (user_id) REFERENCES user(user_id)
 )
@@ -35,8 +38,16 @@ CREATE TABLE IF NOT EXISTS expense (
     description TEXT,
     recurring BOOLEAN NOT NULL,
     frequency TEXT,
+    category TEXT,
     user_id INTEGER,
     FOREIGN KEY (user_id) REFERENCES user(user_id)
+)
+''')
+
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS category (
+    category_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_name TEXT NOT NULL
 )
 ''')
 
@@ -44,7 +55,18 @@ conn.commit()
 
 # Styling
 def apply_minimal_style(widget):
-    widget.config(font=("Helvetica", 12), padx=10, pady=5)
+    widget.config(font=("Helvetica", 12), padx=10, pady=5, relief=tk.FLAT, bd=0)
+    widget.configure(highlightbackground="#d3d3d3", highlightcolor="#d3d3d3", borderwidth=0)
+
+# Custom styling for rounded buttons and entry fields
+def apply_curved_style(widget, bg_color, fg_color):
+    widget.config(
+        font=("Helvetica", 12), 
+        bg=bg_color, fg=fg_color,
+        relief=tk.FLAT, bd=0,
+        highlightbackground=bg_color, 
+        highlightcolor=bg_color
+    )
 
 # Create main window
 root = tk.Tk()
@@ -71,54 +93,108 @@ def show_options(user_name):
 
     tk.Label(root, text=f"Welcome, {user_name}!", font=("Helvetica", 14)).pack(pady=10)
 
-    # Buttons for Income and Expense
-    def show_income_form():
-        show_transaction_form("income", user_name)
-    
-    def show_expense_form():
-        show_transaction_form("expense", user_name)
+    # Set up buttons for Income and Expense
+    options_frame = tk.Frame(root)
+    options_frame.pack(pady=20)
 
-    tk.Button(root, text="Income", command=show_income_form, width=20).place(x=100, y=150)
-    tk.Button(root, text="Expenses", command=show_expense_form, width=20).place(x=500, y=150)
+    income_button = tk.Button(options_frame, text="Income", command=lambda: show_transaction_form("income", user_name), width=20, bg="#28a745", fg="white")
+    apply_curved_style(income_button, "#28a745", "white")
+    income_button.pack(side=tk.LEFT, padx=20)
+
+    expense_button = tk.Button(options_frame, text="Expenses", command=lambda: show_transaction_form("expense", user_name), width=20, bg="#dc3545", fg="white")
+    apply_curved_style(expense_button, "#dc3545", "white")
+    expense_button.pack(side=tk.LEFT, padx=20)
+
+# Function to add a new category
+def add_new_category():
+    def save_category():
+        new_category = category_entry.get().strip()
+        if new_category:
+            cursor.execute("INSERT INTO category (category_name) VALUES (?)", (new_category,))
+            conn.commit()
+            messagebox.showinfo("Success", "Category added successfully!")
+            popup.destroy()
+            update_category_dropdown()  # Update the dropdown with the new category
+
+    popup = tk.Toplevel(root)
+    popup.title("Add New Category")
+    popup.geometry("300x150")
+
+    tk.Label(popup, text="Category Name:").pack(pady=10)
+    category_entry = tk.Entry(popup)
+    category_entry.pack(pady=10)
+
+    save_button = tk.Button(popup, text="Save", command=save_category)
+    apply_curved_style(save_button, "#28a745", "white")
+    save_button.pack(pady=10)
+
+# Function to update category dropdown
+def update_category_dropdown():
+    cursor.execute("SELECT DISTINCT category_name FROM category")
+    categories = [row[0] for row in cursor.fetchall()]
+    # Clear the existing values and update with new unique categories
+    category_combobox['values'] = categories + ["Add New Category..."]
+
 
 # Function to show form for income/expenses
 def show_transaction_form(transaction_type, user_name):
     for widget in root.winfo_children():
         widget.destroy()
 
+    # Set up grid layout
+    form_frame = tk.Frame(root)
+    form_frame.pack(pady=20)
+
     # Label for Transaction type
-    tk.Label(root, text=f"Add {transaction_type.capitalize()}", font=("Helvetica", 14)).pack(pady=10)
+    tk.Label(form_frame, text=f"Add {transaction_type.capitalize()}", font=("Helvetica", 14)).grid(row=0, column=0, columnspan=2, pady=10)
 
     # Amount field
-    tk.Label(root, text="Amount:").pack()
-    amount_entry = tk.Entry(root)
-    amount_entry.pack()
+    tk.Label(form_frame, text="Amount:").grid(row=1, column=0, sticky=tk.W)
+    amount_entry = tk.Entry(form_frame)
+    apply_curved_style(amount_entry, "white", "black")
+    amount_entry.grid(row=1, column=1)
 
-    # Date field
-    tk.Label(root, text="Date (YYYY-MM-DD):").pack()
-    date_entry = tk.Entry(root)
-    date_entry.pack()
+    # Date field with default to current date
+    tk.Label(form_frame, text="Date (DD-MM-YYYY):").grid(row=2, column=0, sticky=tk.W)
+    date_entry = tk.Entry(form_frame)
+    apply_curved_style(date_entry, "white", "black")
+    # Set the default date to today's date
+    date_entry.insert(0, datetime.today().strftime('%d-%m-%Y'))  # Format date as YYYY-MM-DD
+    date_entry.grid(row=2, column=1)
 
     # Description field
-    tk.Label(root, text="Description:").pack()
-    description_entry = tk.Entry(root)
-    description_entry.pack()
+    tk.Label(form_frame, text="Description:").grid(row=3, column=0, sticky=tk.W)
+    description_entry = tk.Entry(form_frame)
+    apply_curved_style(description_entry, "white", "black")
+    description_entry.grid(row=3, column=1)
 
-    # Recurring field
-    tk.Label(root, text="Recurring (Yes/No):").pack()
-    recurring_entry = tk.Entry(root)
-    recurring_entry.pack()
+    # Category dropdown field
+    tk.Label(form_frame, text="Category:").grid(row=4, column=0, sticky=tk.W)
+    global category_combobox
+    category_combobox = ttk.Combobox(form_frame)
+    update_category_dropdown()
+    category_combobox.grid(row=4, column=1)
+    category_combobox.bind("<<ComboboxSelected>>", lambda e: add_new_category() if category_combobox.get() == "Add New Category..." else None)
+
+    # Recurring field as radio buttons
+    tk.Label(form_frame, text="Repeat Transaction:").grid(row=5, column=0, sticky=tk.W)
+    recurring_var = tk.StringVar(value="No")
+    radio_frame = tk.Frame(form_frame)
+    tk.Radiobutton(radio_frame, text="Yes", variable=recurring_var, value="Yes").pack(side=tk.LEFT)
+    tk.Radiobutton(radio_frame, text="No", variable=recurring_var, value="No").pack(side=tk.LEFT)
+    radio_frame.grid(row=5, column=1, sticky=tk.W)
 
     # Frequency field as a dropdown
-    tk.Label(root, text="Frequency:").pack()
-    frequency_combobox = ttk.Combobox(root, values=["Annual", "Monthly", "Weekly"])
-    frequency_combobox.pack()
+    tk.Label(form_frame, text="Frequency:").grid(row=6, column=0, sticky=tk.W)
+    frequency_combobox = ttk.Combobox(form_frame, values=["Annual", "Monthly", "Weekly"])
+    frequency_combobox.grid(row=6, column=1)
 
     def submit_transaction():
         amount = amount_entry.get().strip()
         date = date_entry.get().strip()
         description = description_entry.get().strip()
-        recurring = recurring_entry.get().strip().lower() == "yes"
+        category = category_combobox.get().strip()
+        recurring = recurring_var.get() == "Yes"
         frequency = frequency_combobox.get().strip()
 
         if not amount or not date:
@@ -130,32 +206,61 @@ def show_transaction_form(transaction_type, user_name):
 
         if transaction_type == "income":
             cursor.execute('''
-                INSERT INTO income (amount, date, description, recurring, frequency, user_id)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (amount, date, description, recurring, frequency, user_id))
+                INSERT INTO income (amount, date, description, recurring, frequency, category, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (amount, date, description, recurring, frequency, category, user_id))
         else:
             cursor.execute('''
-                INSERT INTO expense (amount, date, description, recurring, frequency, user_id)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (amount, date, description, recurring, frequency, user_id))
+                INSERT INTO expense (amount, date, description, recurring, frequency, category, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''' , (amount, date, description, recurring, frequency, category, user_id))
 
         conn.commit()
         messagebox.showinfo("Success", f"{transaction_type.capitalize()} added successfully!")
         show_options(user_name)
 
-    tk.Button(root, text="Submit", command=submit_transaction).pack(pady=10)
+    # Submit button
+    submit_button = tk.Button(form_frame, text="Submit", command=submit_transaction)
+    apply_curved_style(submit_button, "lightgray", "black")
+    submit_button.grid(row=7, column=0, columnspan=2, pady=10)
 
     # Back button
-    tk.Button(root, text="Back", command=lambda: show_options(user_name)).pack(pady=10)
-    
+    def go_back():
+        show_options(user_name)
+
+    back_button = tk.Button(form_frame, text="Back", command=go_back)
+    apply_curved_style(back_button, "lightgray", "black")
+    back_button.grid(row=8, column=0, columnspan=2)
 
 # User entry screen
-tk.Label(root, text="Enter your name:", font=("Helvetica", 14)).pack(pady=10)
-entry_name = tk.Entry(root)
-entry_name.pack()
-tk.Button(root, text="Submit", command=enter_user).pack(pady=10)
+def show_user_entry_screen():
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    # Set background color
+    root.config(bg="#f5f5f5")  # Shades of gray/white
+    tk.Label(root, text="Enter your name:", font=("Helvetica", 14), bg="#f5f5f5").pack(pady=10)
+    
+    global entry_name
+    entry_name = tk.Entry(root, width=30, relief=tk.FLAT)
+    apply_curved_style(entry_name, "white", "black")
+    entry_name.pack(pady=10)
+
+    entry_name.bind("<Return>", lambda event: enter_user())
+
+    submit_button = tk.Button(root, text="Submit", command=enter_user)
+    apply_curved_style(submit_button, "gray", "black")
+    submit_button.pack(pady=10)
+
+    
+
+show_user_entry_screen()
 
 root.mainloop()
+
+
+
+
 
 
 
