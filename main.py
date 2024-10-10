@@ -3,7 +3,6 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from datetime import datetime
 
-
 # Connect to the database
 conn = sqlite3.connect('haushaltsbuch.db')
 cursor = conn.cursor()
@@ -55,7 +54,7 @@ conn.commit()
 
 # Styling
 def apply_minimal_style(widget):
-    widget.config(font=("Helvetica", 12), padx=10, pady=5, relief=tk.FLAT, bd=0)
+    widget.config(font=("Helvetica", 12), relief=tk.FLAT, bd=0)  # Removed padx and pady
     widget.configure(highlightbackground="#d3d3d3", highlightcolor="#d3d3d3", borderwidth=0)
 
 # Custom styling for rounded buttons and entry fields
@@ -71,13 +70,13 @@ def apply_curved_style(widget, bg_color, fg_color):
 # Create main window
 root = tk.Tk()
 root.geometry("800x480")
-root.title("Household Budget")
+root.title("Haushaltsbuch")
 
 # Function to enter user
 def enter_user():
     user_name = entry_name.get().strip()
     if not user_name:
-        messagebox.showerror("Error", "Please enter your name")
+        messagebox.showerror("Empty Field", "Please enter your name")
         return
     cursor.execute("SELECT user_id FROM user WHERE name = ?", (user_name,))
     user = cursor.fetchone()
@@ -90,8 +89,8 @@ def enter_user():
 def show_options(user_name):
     for widget in root.winfo_children():
         widget.destroy()
-
-    tk.Label(root, text=f"Welcome, {user_name}!", font=("Helvetica", 14)).pack(pady=10)
+    
+    tk.Label(root, text=f"Willkommen, {user_name}!", font=("Helvetica", 14)).pack(pady=10)
 
     # Set up buttons for Income and Expense
     options_frame = tk.Frame(root)
@@ -105,20 +104,80 @@ def show_options(user_name):
     apply_curved_style(expense_button, "#dc3545", "white")
     expense_button.pack(side=tk.LEFT, padx=20)
 
+    # Create a frame for the ledger
+    ledger_frame = tk.Frame(root)
+    ledger_frame.pack(pady=20, fill=tk.BOTH, expand=True)
+
+    # Create Treeview for transactions
+    columns = ("Name", "Date", "Income", "Expenses", "Category")
+    tree = ttk.Treeview(ledger_frame, columns=columns, show='headings')
+
+    for col in columns:
+        # Enable sorting on each column header
+        tree.heading(col, text=col, command=lambda c=col: sort_column(tree, c))
+
+    # Add a scrollbar
+    scrollbar = ttk.Scrollbar(ledger_frame, orient="vertical", command=tree.yview)
+    tree.configure(yscroll=scrollbar.set)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # Fetch all income transactions
+    cursor.execute("SELECT u.name, i.date, i.amount, NULL, i.category FROM income i JOIN user u ON i.user_id = u.user_id")
+    income_transactions = cursor.fetchall()
+
+    # Fetch all expense transactions
+    cursor.execute("SELECT u.name, e.date, NULL, e.amount, e.category FROM expense e JOIN user u ON e.user_id = u.user_id")
+    expense_transactions = cursor.fetchall()
+
+    # Combine and sort transactions by date
+    all_transactions = []
+    for transaction in income_transactions:
+        all_transactions.append((transaction[0], transaction[1], f"{transaction[2]:.2f}", "", transaction[4]))
+    for transaction in expense_transactions:
+        all_transactions.append((transaction[0], transaction[1], "", f"{transaction[3]:.2f}", transaction[4]))
+
+    # Sort the transactions by date
+    all_transactions.sort(key=lambda x: x[1])  # Sort by the date (second column)
+
+    # Insert sorted transactions into the tree
+    for transaction in all_transactions:
+        tree.insert("", "end", values=transaction)
+
+    # Default sorting by date
+    sort_column(tree, "Date")  # Call sort by Date to set default sorting
+
+def sort_column(tree, col):
+    # Create a list of data for sorting
+    data_list = [(tree.set(k, col), k) for k in tree.get_children('')]
+    # Sort the data
+    data_list.sort()
+    # Rearrange the items in the treeview
+    for index, (val, k) in enumerate(data_list):
+        tree.move(k, '', index)
+
+
+
+
 # Function to add a new category
 def add_new_category():
     def save_category():
         new_category = category_entry.get().strip()
         if new_category:
-            cursor.execute("INSERT INTO category (category_name) VALUES (?)", (new_category,))
-            conn.commit()
-            messagebox.showinfo("Success", "Category added successfully!")
-            popup.destroy()
-            update_category_dropdown()  # Update the dropdown with the new category
+            cursor.execute("SELECT category_name FROM category WHERE category_name = ?", (new_category,))
+            if cursor.fetchone():
+                messagebox.showerror("Duplicate", "This category already exists.")
+            else:
+                cursor.execute("INSERT INTO category (category_name) VALUES (?)", (new_category,))
+                conn.commit()
+                messagebox.showinfo("Success", "Category added successfully!")
+                popup.destroy()
+                update_category_dropdown()  # Update the dropdown with the new category
 
     popup = tk.Toplevel(root)
     popup.title("Add New Category")
-    popup.geometry("300x150")
+    popup.geometry("240x120")
 
     tk.Label(popup, text="Category Name:").pack(pady=10)
     category_entry = tk.Entry(popup)
@@ -134,7 +193,6 @@ def update_category_dropdown():
     categories = [row[0] for row in cursor.fetchall()]
     # Clear the existing values and update with new unique categories
     category_combobox['values'] = categories + ["Add New Category..."]
-
 
 # Function to show form for income/expenses
 def show_transaction_form(transaction_type, user_name):
@@ -152,28 +210,27 @@ def show_transaction_form(transaction_type, user_name):
     tk.Label(form_frame, text="Amount:").grid(row=1, column=0, sticky=tk.W)
     amount_entry = tk.Entry(form_frame)
     apply_curved_style(amount_entry, "white", "black")
-    amount_entry.grid(row=1, column=1)
+    amount_entry.grid(row=1, column=1, padx=10, pady=5)  # Added padding to grid
 
     # Date field with default to current date
     tk.Label(form_frame, text="Date (DD-MM-YYYY):").grid(row=2, column=0, sticky=tk.W)
     date_entry = tk.Entry(form_frame)
     apply_curved_style(date_entry, "white", "black")
-    # Set the default date to today's date
-    date_entry.insert(0, datetime.today().strftime('%d-%m-%Y'))  # Format date as YYYY-MM-DD
-    date_entry.grid(row=2, column=1)
+    date_entry.insert(0, datetime.today().strftime('%d-%m-%Y'))  # Set the default date
+    date_entry.grid(row=2, column=1, padx=10, pady=5)  # Added padding to grid
 
     # Description field
     tk.Label(form_frame, text="Description:").grid(row=3, column=0, sticky=tk.W)
     description_entry = tk.Entry(form_frame)
     apply_curved_style(description_entry, "white", "black")
-    description_entry.grid(row=3, column=1)
+    description_entry.grid(row=3, column=1, padx=10, pady=5)  # Added padding to grid
 
     # Category dropdown field
     tk.Label(form_frame, text="Category:").grid(row=4, column=0, sticky=tk.W)
     global category_combobox
     category_combobox = ttk.Combobox(form_frame)
     update_category_dropdown()
-    category_combobox.grid(row=4, column=1)
+    category_combobox.grid(row=4, column=1, padx=10, pady=5)
     category_combobox.bind("<<ComboboxSelected>>", lambda e: add_new_category() if category_combobox.get() == "Add New Category..." else None)
 
     # Recurring field as radio buttons
@@ -186,8 +243,17 @@ def show_transaction_form(transaction_type, user_name):
 
     # Frequency field as a dropdown
     tk.Label(form_frame, text="Frequency:").grid(row=6, column=0, sticky=tk.W)
-    frequency_combobox = ttk.Combobox(form_frame, values=["Annual", "Monthly", "Weekly"])
-    frequency_combobox.grid(row=6, column=1)
+    frequency_combobox = ttk.Combobox(form_frame, values=["Annual", "Monthly", "Weekly"], state="disabled")
+    frequency_combobox.grid(row=6, column=1, padx=10, pady=5)
+
+    # Toggle frequency dropdown based on recurring radio button
+    def toggle_frequency():
+        if recurring_var.get() == "Yes":
+            frequency_combobox.config(state="normal")
+        else:
+            frequency_combobox.config(state="disabled")
+
+    recurring_var.trace_add('write', lambda *args: toggle_frequency())
 
     def submit_transaction():
         amount = amount_entry.get().strip()
@@ -197,66 +263,62 @@ def show_transaction_form(transaction_type, user_name):
         recurring = recurring_var.get() == "Yes"
         frequency = frequency_combobox.get().strip()
 
-        if not amount or not date:
-            messagebox.showerror("Error", "Amount and Date are required")
+        # Validate amount
+        try:
+            amount = float(amount)
+            if amount <= 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("Invalid Amount", "Please enter a valid positive number for amount.")
             return
 
-        cursor.execute("SELECT user_id FROM user WHERE name = ?", (user_name,))
-        user_id = cursor.fetchone()[0]
+        # Validate date format
+        try:
+            date = datetime.strptime(date, '%d-%m-%Y').date()
+        except ValueError:
+            messagebox.showerror("Invalid Date", "Please enter the date in the format DD-MM-YYYY.")
+            return
 
         if transaction_type == "income":
-            cursor.execute('''
-                INSERT INTO income (amount, date, description, recurring, frequency, category, user_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (amount, date, description, recurring, frequency, category, user_id))
+            cursor.execute('''INSERT INTO income (amount, date, description, recurring, frequency, category, user_id)
+                              VALUES (?, ?, ?, ?, ?, ?, (SELECT user_id FROM user WHERE name = ?))''',
+                           (amount, date, description, recurring, frequency, category, user_name))
         else:
-            cursor.execute('''
-                INSERT INTO expense (amount, date, description, recurring, frequency, category, user_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''' , (amount, date, description, recurring, frequency, category, user_id))
+            cursor.execute('''INSERT INTO expense (amount, date, description, recurring, frequency, category, user_id)
+                              VALUES (?, ?, ?, ?, ?, ?, (SELECT user_id FROM user WHERE name = ?))''',
+                           (amount, date, description, recurring, frequency, category, user_name))
 
         conn.commit()
         messagebox.showinfo("Success", f"{transaction_type.capitalize()} added successfully!")
         show_options(user_name)
 
-    # Submit button
+    # Submit and Back buttons
     submit_button = tk.Button(form_frame, text="Submit", command=submit_transaction)
-    apply_curved_style(submit_button, "lightgray", "black")
-    submit_button.grid(row=7, column=0, columnspan=2, pady=10)
+    apply_curved_style(submit_button, "#28a745", "white")
+    submit_button.grid(row=7, column=0, pady=20)
 
-    # Back button
-    def go_back():
-        show_options(user_name)
+    back_button = tk.Button(form_frame, text="Back", command=lambda: show_options(user_name))
+    apply_curved_style(back_button, "#007bff", "white")
+    back_button.grid(row=7, column=1, pady=20)
 
-    back_button = tk.Button(form_frame, text="Back", command=go_back)
-    apply_curved_style(back_button, "lightgray", "black")
-    back_button.grid(row=8, column=0, columnspan=2)
+# Initial Screen to enter the user's name
+label_name = tk.Label(root, text="Enter Your Name:", font=("Helvetica", 14))
+label_name.pack(pady=20)
 
-# User entry screen
-def show_user_entry_screen():
-    for widget in root.winfo_children():
-        widget.destroy()
+entry_name = tk.Entry(root)
+apply_minimal_style(entry_name)
+entry_name.pack(pady=10)
 
-    # Set background color
-    root.config(bg="#f5f5f5")  # Shades of gray/white
-    tk.Label(root, text="Enter your name:", font=("Helvetica", 14), bg="#f5f5f5").pack(pady=10)
-    
-    global entry_name
-    entry_name = tk.Entry(root, width=30, relief=tk.FLAT)
-    apply_curved_style(entry_name, "white", "black")
-    entry_name.pack(pady=10)
+button_enter = tk.Button(root, text="Enter", command=enter_user)
+apply_curved_style(button_enter, "#28a745", "white")
+button_enter.pack(pady=10)
 
-    entry_name.bind("<Return>", lambda event: enter_user())
-
-    submit_button = tk.Button(root, text="Submit", command=enter_user)
-    apply_curved_style(submit_button, "gray", "black")
-    submit_button.pack(pady=10)
-
-    
-
-show_user_entry_screen()
+# Bind the Enter key for submitting the name
+root.bind('<Return>', lambda event: enter_user())
 
 root.mainloop()
+
+
 
 
 
