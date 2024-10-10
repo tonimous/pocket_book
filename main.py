@@ -387,9 +387,14 @@ def show_transaction_form(transaction_type, user_name):
         except ValueError:
             messagebox.showerror("Invalid Date", "Please enter the date in the format DD-MM-YYYY.")
             return
+        
 
         if recurring:
             # Determine how many occurrences to add
+            if not frequency:  # Ensure that frequency is not empty or None
+                messagebox.showerror("Missing Frequency", "Please select a frequency for recurring transactions.")
+                return  # Exit the function to prevent submission
+            
             time_last = 0
             if frequency == "Weekly":
                 time_last = 4  # For the next 4 weeks
