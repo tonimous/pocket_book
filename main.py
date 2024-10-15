@@ -91,7 +91,8 @@ def show_options(user_name):
     for widget in root.winfo_children():
         widget.destroy()
     
-    tk.Label(root, text=f"Willkommen, {user_name}!", font=("Helvetica", 14)).pack(pady=10)
+    tk.Label(root, text=f"Willkommen, {user_name}!", font=("Helvetica", 14)).pack(pady=10, side=tk.TOP)
+
 
     options_frame = tk.Frame(root)
     options_frame.pack(pady=20)
@@ -378,7 +379,7 @@ def show_transaction_form(transaction_type, user_name):
             if amount <= 0:
                 raise ValueError
         except ValueError:
-            messagebox.showerror("Invalid Amount", "Please enter a valid positive number for amount.")
+            messagebox.showerror("Invalid Amount", "Please enter an amount.")
             return
 
         # Validate date format
@@ -392,7 +393,7 @@ def show_transaction_form(transaction_type, user_name):
         if recurring:
             # Determine how many occurrences to add
             if not frequency:  # Ensure that frequency is not empty or None
-                messagebox.showerror("Missing Frequency", "Please select a frequency for recurring transactions.")
+                messagebox.showerror("Missing Frequency", "Please select a frequency for transactions.")
                 return  # Exit the function to prevent submission
             
             time_last = 0
