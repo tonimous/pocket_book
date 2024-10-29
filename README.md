@@ -12,7 +12,7 @@
 **Getting Started:**
 
 1. **Requirements:**
-   * Python 3
+   * Python 
    * SQLite3
 
 2. **Installation:**
